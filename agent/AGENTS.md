@@ -35,6 +35,10 @@
 - If `ruff` is not in `pyproject.toml`, add it: `uv add --dev ruff` (run from repo root).
 - Use `uv run ruff check` and `uv run ruff format` to lint and format.
 
+## Workflow
+
+- Always show the diff and ask for user review before pushing to remote. Don't push without approval.
+
 ## dot-pi Repo
 
 - The git repo root is `~/.pi`, but most config lives under `agent/`. Use `agent/` prefix in git commands (e.g. `git add agent/extensions/foo.ts`, not `git add extensions/foo.ts`).

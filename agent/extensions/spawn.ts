@@ -336,7 +336,7 @@ export default function (pi: ExtensionAPI) {
 			}
 
 			const parentBranch = getCurrentBranch(cwd);
-			const projectName = basename(repoRoot);
+			const projectName = basename(repoRoot).replace(/^\.+/, "") || "project";
 
 			// --- Mode selection ---
 			const modeLabels = [
@@ -702,7 +702,7 @@ export default function (pi: ExtensionAPI) {
 				return;
 			}
 
-			const projectName = basename(repoRoot);
+			const projectName = basename(repoRoot).replace(/^\.+/, "") || "project";
 			const lines: string[] = ["Active spawn worktrees:", ""];
 			for (const w of spawnWorktrees) {
 				const name = w.branch.replace("spawn/", "");
@@ -762,7 +762,7 @@ export default function (pi: ExtensionAPI) {
 				return;
 			}
 
-			const projectName = basename(repoRoot);
+			const projectName = basename(repoRoot).replace(/^\.+/, "") || "project";
 			const items = spawnWorktrees.map((w) => {
 				const name = w.branch.replace("spawn/", "");
 				const tmuxName = `${projectName}-${name}`;
