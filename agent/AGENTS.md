@@ -35,6 +35,13 @@
 - If `ruff` is not in `pyproject.toml`, add it: `uv add --dev ruff` (run from repo root).
 - Use `uv run ruff check` and `uv run ruff format` to lint and format.
 
+## dot-pi Repo
+
+- The git repo root is `~/.pi`, but most config lives under `agent/`. Use `agent/` prefix in git commands (e.g. `git add agent/extensions/foo.ts`, not `git add extensions/foo.ts`).
+- `setup.sh` at repo root bootstraps new machines: installs nvm + Node + pi, then clones/merges config.
+- **Tracked**: extensions, skills, gotchas, AGENTS.md files, `agent/settings.json` (user preferences: default model, packages)
+- **Gitignored**: `agent/auth.json` (API keys), `agent/models.json` (local model servers), `agent/sessions/`, `agent/bin/`
+
 ## Sub-docs
 
 - [Extensions](extensions/AGENTS.md) — pi extensions, gotchas, and future plans
