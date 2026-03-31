@@ -15,31 +15,13 @@
 - When updating AGENTS.md with new notes, do NOT add a counter (new notes start at zero).
 - This data helps the user understand which kinds of working knowledge are most valuable across sessions.
 
-## Pi Extensions
+## Code Style
 
-- Global extensions live in `~/.pi/agent/extensions/*.ts` (auto-discovered).
-- **`update-agents-before-compact.ts`**: Hooks `session_before_compact` to prompt the agent to update AGENTS.md before context is lost. Shows a 10s confirm dialog; if accepted, cancels compaction, injects a follow-up message for the agent to update AGENTS.md, then triggers compaction after the agent finishes. Use `/reload` to pick up changes to extensions.
-- **`message-in-a-bottle.ts`**: `/message-in-a-bottle` command — scans project for `TODO[pi]` lines, presents interactive multi-select (space = work on, r = remove), shows context preview around cursor, then sends selected items as a user message to the agent. Uses `rg` with `grep` fallback.
-
-## Pi Extension Gotchas
-
-- **`pi.exec()` is unreliable for shell commands** — args may be escaped/interpreted differently than expected. Use `execSync` from `node:child_process` with `{ cwd: ctx.cwd, encoding: "utf-8" }` instead.
-- **`rg` may not be on the user's PATH** even if pi bundles it at `~/.pi/agent/bin/rg`. Always provide a `grep` fallback.
-- **Unused imports in extensions** don't cause load failures but are noisy — keep imports clean.
-
-## PyTorch Gotchas
-
-- **Protocol + nn.Module MRO**: when a class inherits from both a `Protocol` and `nn.Module`, `nn.Module` must come first in the base list. Otherwise Protocol's `__call__` (which returns None) shadows `nn.Module.__call__` (which dispatches to `forward`). Similarly, `super().__init__()` may not reach `nn.Module.__init__()` through the Protocol — use `nn.Module.__init__(self)` explicitly.
-- **0 × -inf = NaN**: one-hot matmul with a matrix containing `-inf` values produces NaN (IEEE float). Use direct tensor indexing (`matrix[indices]`) instead of `F.one_hot(indices) @ matrix`.
-- **`F.one_hot()` returns LongTensor**: must call `.float()` before passing to `nn.Linear` or other float-expecting layers, otherwise `RuntimeError: mat1 and mat2 must have the same dtype`.
-- **`nn.Embedding` padding_idx after manual weight assignment**: `nn.Embedding` zeros the padding row at init, but does NOT re-enforce the constraint after `.weight.data.copy_()` or similar. Always `.zero_()` the padding row explicitly after manual weight assignment.
-- **ESM `ESMC.from_pretrained` device arg**: must pass `torch.device("cpu")`, NOT the string `"cpu"` — ESM's code calls `device.type` which fails on a plain string with `AttributeError: 'str' object has no attribute 'type'`.
-
-## Python ABC / Mixin Gotchas
-
-- **`@abstractmethod` on non-ABC mixins doesn't propagate**: `ABCMeta.__new__` collects abstract methods from `base.__abstractmethods__`, which is only set on classes created by `ABCMeta`. A plain mixin with `@abstractmethod` won't have its abstract methods enforced on child classes. Fix: make the mixin inherit from `ABC`.
-- **HuggingFace mixin pattern**: no `__init__` in mixins, use class-level attribute defaults. Avoids all cooperative `__init__` / MRO issues with nn.Module. See HF's `GenerationMixin`, `ModuleUtilsMixin`, `PushToHubMixin` — all are pure method bags with zero `__init__`.
-- **ABC mixin + nn.Module MRO**: `SomeMixin(ABC)` composes cleanly with `SomeModel(nn.Module, ABC)` — `ABCMeta` is a subclass of `type`, so metaclass resolution works. Just don't list `ABC` explicitly in a class that already inherits from a `ConditionableMixin(ABC)` — that causes MRO conflict (redundant ABC).
+- Be concise — avoid verbose docstrings that restate what the code already says. Keep comments to non-obvious "why" explanations.
+- When redesigning: change the core abstraction only. Don't propagate to every consumer in the same pass — sketch consumer changes in comments or leave as TODOs for the user to adapt.
+- Preserve the user's existing comments, TODOs, and docstrings. Add new notes alongside them — don't replace or delete what the user wrote.
+- Don't add tiny wrapper methods (e.g. `tokenize()` that just calls `self.tokenizer(...)`) — let callers use the underlying API directly.
+- Prefer composition over multiple inheritance when both parents have `__init__` — double `nn.Module.__init__` resets internal state. Use "has-a" (e.g. `self.probe = LinearProbe(...)`) not "is-a" for combining template nn.Modules with PredictiveModel.
 
 ## Python Projects
 
@@ -52,3 +34,11 @@
   - Install package in editable mode: `uv pip install -e .`
 - If `ruff` is not in `pyproject.toml`, add it: `uv add --dev ruff` (run from repo root).
 - Use `uv run ruff check` and `uv run ruff format` to lint and format.
+
+## Sub-docs
+
+- [Extensions](extensions/AGENTS.md) — pi extensions, gotchas, and future plans
+- [Skills](skills/AGENTS.md) — reusable procedural workflows and design preferences
+- [PyTorch Gotchas](gotchas/pytorch.md) — nn.Module MRO, LoRA, embedding traps
+- [Python ABC / Mixin Gotchas](gotchas/python-abc-mixin.md) — abstractmethod propagation, HF mixin pattern
+- [SLURM](gotchas/slurm.md) — cluster info, submit script, buffering
