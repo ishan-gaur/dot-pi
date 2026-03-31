@@ -2,4 +2,3 @@ agent/bin
 agent/sessions
 agent/auth.json
 agent/models.json
-agent/settings.json
