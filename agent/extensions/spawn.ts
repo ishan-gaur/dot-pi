@@ -1,9 +1,11 @@
 /**
- * Spawn extension — create a git worktree + tmux session + pi instance for a task.
+ * Spawn extension — create and manage git worktree + tmux session + pi instances.
  *
- * Usage: /spawn <task description>
+ * Commands:
+ *   /spawn <task>   — create a new worktree + tmux session + pi for a task
+ *   /spawn-list     — list worktrees, select one to merge or clean up
  *
- * What it does:
+ * /spawn creates:
  *   1. Asks which spawn mode to use:
  *      - Resume: fork session file to the spawned pi (full tree + /tree navigation),
  *        then start a fresh session here
@@ -14,8 +16,12 @@
  *   4. Creates a tmux session in the worktree directory
  *   5. Launches `pi` inside that tmux with the appropriate context
  *
- * Resume and Fork use SessionManager.forkFrom() to create a real session file,
- * so the spawned pi has the full conversation tree with /tree, /fork, branching etc.
+ * /spawn-list flow:
+ *   1. Shows worktrees with pi/tmux status (working/idle/shell/none)
+ *   2. Safety gate: blocks if pi is still active (working/idle), offers to kill
+ *   3. Choose: merge into current branch, or discard
+ *   4. Artifact audit: queries the spawned session for gitignored files to preserve
+ *   5. Cleanup: kill tmux, migrate sessions, remove worktree, delete branch
  *
  * Worktrees are created at ../<project>-worktrees/<name> relative to the repo root.
  */
@@ -661,9 +667,9 @@ export default function (pi: ExtensionAPI) {
 		},
 	});
 
-	// Command to list active spawn worktrees
+	// Command to list, merge, and clean up spawn worktrees
 	pi.registerCommand("spawn-list", {
-		description: "List active spawn worktrees and tmux sessions",
+		description: "List spawn worktrees — select one to merge or clean up",
 		handler: async (_args, ctx) => {
 			const cwd = ctx.cwd;
 			const repoRoot = getRepoRoot(cwd);
@@ -672,6 +678,7 @@ export default function (pi: ExtensionAPI) {
 				return;
 			}
 
+			// --- Parse worktrees ---
 			const worktreeList = shSafe("git worktree list --porcelain", cwd);
 			if (!worktreeList) {
 				ctx.ui.notify("No worktrees found", "info");
@@ -696,120 +703,206 @@ export default function (pi: ExtensionAPI) {
 			if (current.path) worktrees.push(current as any);
 
 			const spawnWorktrees = worktrees.filter((w) => w.branch?.startsWith("spawn/"));
-
 			if (spawnWorktrees.length === 0) {
 				ctx.ui.notify("No active spawn worktrees", "info");
 				return;
 			}
 
 			const projectName = basename(repoRoot).replace(/^\.+/, "") || "project";
-			const lines: string[] = ["Active spawn worktrees:", ""];
-			for (const w of spawnWorktrees) {
+
+			// --- Select worktree ---
+			const items = spawnWorktrees.map((w) => {
 				const name = w.branch.replace("spawn/", "");
 				const tmuxName = `${projectName}-${name}`;
 				const status = getTmuxStatus(tmuxName);
-				const statusLabel =
+				const statusIcon =
 					status === "working"
 						? "● working"
 						: status === "idle"
 							? "◑ idle"
 							: status === "shell"
-								? "○ shell (pi exited)"
+								? "○ shell"
 								: "○ no tmux";
-				lines.push(`  ${w.branch}  ${statusLabel}`);
-				lines.push(`    ${w.path}`);
-				if (status !== "none") {
-					lines.push(`    tmux attach -t ${tmuxName}`);
-				}
-				lines.push("");
-			}
-
-			ctx.ui.notify(lines.join("\n"), "info");
-		},
-	});
-
-	// Command to clean up a spawn worktree
-	pi.registerCommand("spawn-clean", {
-		description: "Remove a spawn worktree and its branch",
-		handler: async (args, ctx) => {
-			const cwd = ctx.cwd;
-			const repoRoot = getRepoRoot(cwd);
-			if (!repoRoot) {
-				ctx.ui.notify("Not in a git repository", "error");
-				return;
-			}
-
-			const worktreeList = shSafe("git worktree list --porcelain", cwd);
-			const worktrees: { path: string; branch: string }[] = [];
-			let current: Partial<{ path: string; branch: string }> = {};
-			for (const line of worktreeList.split("\n")) {
-				if (line.startsWith("worktree ")) {
-					if (current.path) worktrees.push(current as any);
-					current = { path: line.slice(9) };
-				} else if (line.startsWith("branch ")) {
-					current.branch = line.slice(7).replace("refs/heads/", "");
-				} else if (line === "") {
-					if (current.path) worktrees.push(current as any);
-					current = {};
-				}
-			}
-			if (current.path) worktrees.push(current as any);
-
-			const spawnWorktrees = worktrees.filter((w) => w.branch?.startsWith("spawn/"));
-
-			if (spawnWorktrees.length === 0) {
-				ctx.ui.notify("No spawn worktrees to clean up", "info");
-				return;
-			}
-
-			const projectName = basename(repoRoot).replace(/^\.+/, "") || "project";
-			const items = spawnWorktrees.map((w) => {
-				const name = w.branch.replace("spawn/", "");
-				const tmuxName = `${projectName}-${name}`;
-				const status = getTmuxStatus(tmuxName);
-				const statusLabel =
-					status === "working"
-						? " ● working"
-						: status === "idle"
-							? " ◑ idle"
-							: status === "shell"
-								? " ○ shell"
-								: "";
-				return `${w.branch}${statusLabel}  (${w.path})`;
+				return `${w.branch}  ${statusIcon}  (${w.path})`;
 			});
 
-			const choice = await ctx.ui.select("Remove which spawn worktree?", items);
+			const choice = await ctx.ui.select("Spawn worktrees:", items);
 			if (!choice) return;
 
-			const branch = choice.split(/\s/)[0];
-			const wt = spawnWorktrees.find((w) => w.branch === branch);
+			const selectedBranch = choice.split(/\s/)[0];
+			const wt = spawnWorktrees.find((w) => w.branch === selectedBranch);
 			if (!wt) return;
 
-			const name = branch.replace("spawn/", "");
+			const name = selectedBranch.replace("spawn/", "");
 			const tmuxName = `${projectName}-${name}`;
+			const piStatus = getTmuxStatus(tmuxName);
 
-			const confirmed = await ctx.ui.confirm(
-				"Remove spawn worktree?",
-				`This will:\n- Kill tmux session ${tmuxName} (if running)\n- Migrate session files to the main project\n- Remove worktree at ${wt.path}\n- Delete branch ${branch}`,
+			// --- Safety gate: block if pi is still active ---
+			if (piStatus === "working" || piStatus === "idle") {
+				const statusDesc = piStatus === "working"
+					? "pi is actively working"
+					: "pi is running (idle)";
+				const killAndContinue = await ctx.ui.confirm(
+					`${statusDesc} in tmux session ${tmuxName}`,
+					"Kill the session and continue, or cancel?",
+				);
+				if (!killAndContinue) return;
+
+				shSafe(`tmux kill-session -t '${tmuxName}'`, cwd);
+				ctx.ui.notify(`Killed tmux session ${tmuxName}`, "info");
+			} else if (piStatus === "shell") {
+				// pi exited but shell is open — just inform, will kill during cleanup
+				ctx.ui.notify(
+					`tmux session ${tmuxName} is open (pi exited). It will be closed during cleanup.`,
+					"info",
+				);
+			}
+
+			// --- Choose action: merge, discard, or cancel ---
+			const currentBranch = getCurrentBranch(cwd);
+			const actionChoice = await ctx.ui.select(
+				`What to do with ${selectedBranch}?`,
+				[
+					`Merge into ${currentBranch} and clean up`,
+					"Discard (clean up without merging)",
+					"Cancel",
+				],
 			);
-			if (!confirmed) return;
+			if (!actionChoice || actionChoice === "Cancel") return;
 
+			const shouldMerge = actionChoice.startsWith("Merge");
+
+			// --- Artifact audit via spawned session ---
+			const sessionDir = getSessionDirForCwd(wt.path);
+			let auditResult: string | null = null;
+
+			if (existsSync(sessionDir)) {
+				const sessionFiles = readdirSync(sessionDir).filter((f) => f.endsWith(".jsonl"));
+				if (sessionFiles.length > 0) {
+					const runAudit = await ctx.ui.confirm(
+						"Run artifact audit?",
+						"Query the spawned session for gitignored files worth preserving " +
+						"(checkpoints, data, embeddings, etc.)",
+					);
+
+					if (runAudit) {
+						const sessionFile = join(sessionDir, sessionFiles[sessionFiles.length - 1]);
+						const auditPrompt = [
+							"I'm about to remove this worktree directory. Before I do, I need to know what files to preserve.",
+							"",
+							"Based on our conversation history, list every file that:",
+							"1. Was created, downloaded, trained, or generated during this session",
+							"2. Would be expensive or time-consuming to reproduce (training runs, large downloads, computed embeddings, etc.)",
+							"3. Might be too large to track in git",
+							"",
+							"For each file, include:",
+							"- Path (relative to the worktree root)",
+							"- What it is / how it was created",
+							"- Whether it should be copied to the main repo, or is safe to discard (reproducible quickly)",
+							"",
+							"Do NOT list files that are part of the git history (committed source code). Focus on gitignored artifacts, outputs, and data files.",
+							"If there are no such files, just say 'No artifacts to preserve.'",
+						].join("\n");
+
+						try {
+							const piOutput = execSync(
+								`pi -p --session ${shellQuote(sessionFile)} --no-tools --no-extensions --no-skills --no-prompt-templates ${shellQuote(auditPrompt)}`,
+								{ encoding: "utf-8", timeout: 120_000, stdio: ["pipe", "pipe", "pipe"] },
+							).trim();
+
+							if (piOutput && !piOutput.toLowerCase().includes("no artifacts to preserve")) {
+								auditResult = piOutput;
+							}
+						} catch (e: any) {
+							ctx.ui.notify(
+								`Artifact audit failed: ${e.message?.slice(0, 100)}. Continuing without audit.`,
+								"warning",
+							);
+						}
+					}
+				}
+			}
+
+			if (auditResult) {
+				const reviewed = await ctx.ui.editor(
+					"Artifact audit — review what the spawned session reported:",
+					auditResult,
+				);
+				// Editor result is informational — user reads it and decides.
+				// If they cancel the editor, we still continue (they saw the info).
+			}
+
+			// --- Merge if requested ---
+			if (shouldMerge) {
+				try {
+					sh(`git merge ${selectedBranch} --no-edit`, cwd);
+					ctx.ui.notify(`Merged ${selectedBranch} into ${currentBranch}`, "success");
+				} catch (e: any) {
+					ctx.ui.notify(
+						`Merge failed: ${e.message}\n\nResolve conflicts manually, then run /spawn-list again to clean up.`,
+						"error",
+					);
+					return;
+				}
+			}
+
+			// --- Cleanup ---
+			const actions: string[] = [];
+
+			// Kill tmux session if still around
 			if (tmuxSessionExists(tmuxName)) {
 				shSafe(`tmux kill-session -t '${tmuxName}'`, cwd);
+				actions.push(`killed tmux ${tmuxName}`);
 			}
 
 			// Migrate session files before removing the worktree
-			const label = branch;
+			const label = selectedBranch;
 			const migrated = migrateSessionFiles(wt.path, repoRoot, label);
+			if (migrated > 0) {
+				actions.push(`migrated ${migrated} session${migrated > 1 ? "s" : ""}`);
+			}
 
-			shSafe(`git worktree remove --force "${wt.path}"`, cwd);
-			shSafe(`git branch -D ${branch}`, cwd);
+			// Remove worktree (no --force: should be clean after merge/audit)
+			const removeResult = shSafe(`git worktree remove "${wt.path}"`, cwd);
+			if (removeResult === "" && existsSync(wt.path)) {
+				// Remove failed silently (dirty worktree) — ask before forcing
+				const forceRemove = await ctx.ui.confirm(
+					"Worktree has uncommitted or untracked files",
+					`Force remove ${wt.path}? Untracked files will be lost.`,
+				);
+				if (!forceRemove) {
+					ctx.ui.notify(
+						`Worktree kept at ${wt.path}. Clean it up manually and retry.`,
+						"warning",
+					);
+					return;
+				}
+				shSafe(`git worktree remove --force "${wt.path}"`, cwd);
+			}
+			actions.push(`removed worktree`);
 
-			const migratedMsg =
-				migrated > 0
-					? ` (${migrated} session${migrated > 1 ? "s" : ""} migrated to project)`
-					: "";
-			ctx.ui.notify(`Removed ${branch}${migratedMsg}`, "success");
+			// Delete branch: -d after merge (safe), -D for discard (intentional)
+			const branchFlag = shouldMerge ? "-d" : "-D";
+			shSafe(`git branch ${branchFlag} ${selectedBranch}`, cwd);
+			actions.push(`deleted branch ${selectedBranch}`);
+
+			const verb = shouldMerge ? "Merged and cleaned up" : "Discarded";
+			ctx.ui.notify(`${verb} ${selectedBranch} (${actions.join(", ")})`, "success");
+
+			// Inform the agent
+			pi.sendMessage({
+				customType: "spawn-close",
+				content: [
+					`${verb} spawn worktree: ${selectedBranch}`,
+					``,
+					`Actions taken:`,
+					...actions.map((a) => `- ${a}`),
+					shouldMerge ? `\nBranch was merged into \`${currentBranch}\`.` : "",
+				]
+					.filter(Boolean)
+					.join("\n"),
+				display: true,
+			});
 		},
 	});
 }
