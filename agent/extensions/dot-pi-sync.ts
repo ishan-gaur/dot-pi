@@ -5,7 +5,16 @@ export default function (pi: ExtensionAPI) {
 	const DOT_PI = `${process.env.HOME}/.pi`;
 
 	function sh(cmd: string): string {
-		return execSync(cmd, { cwd: DOT_PI, encoding: "utf-8", timeout: 15000 }).trim();
+		return execSync(cmd, {
+			cwd: DOT_PI,
+			encoding: "utf-8",
+			timeout: 15000,
+			env: {
+				...process.env,
+				GIT_TERMINAL_PROMPT: "0", // Never block waiting for credentials
+				GIT_SSH_COMMAND: "ssh -o ConnectTimeout=5 -o BatchMode=yes",
+			},
+		}).trim();
 	}
 
 	function isSpawn(): boolean {
