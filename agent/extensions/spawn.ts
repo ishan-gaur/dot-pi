@@ -824,12 +824,21 @@ export default function (pi: ExtensionAPI) {
 			}
 
 			if (auditResult) {
-				const reviewed = await ctx.ui.editor(
-					"Artifact audit — review what the spawned session reported:",
-					auditResult,
+				// Show the audit result in the conversation so the user can review it
+				pi.sendMessage({
+					customType: "spawn-audit",
+					content: `## Artifact Audit — ${selectedBranch}\n\n${auditResult}`,
+					display: true,
+				});
+
+				const proceed = await ctx.ui.confirm(
+					"Proceed with cleanup?",
+					"Review the artifact audit above. Cancel to handle artifacts before cleanup.",
 				);
-				// Editor result is informational — user reads it and decides.
-				// If they cancel the editor, we still continue (they saw the info).
+				if (!proceed) {
+					ctx.ui.notify("Cleanup paused — handle artifacts, then run /spawn-list again.", "info");
+					return;
+				}
 			}
 
 			// --- Merge if requested ---
