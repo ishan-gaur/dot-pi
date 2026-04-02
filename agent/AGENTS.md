@@ -54,6 +54,16 @@
 - [Python ABC / Mixin Gotchas](gotchas/python-abc-mixin.md) — abstractmethod propagation, HF mixin pattern
 - [SLURM](gotchas/slurm.md) — cluster info, submit script, buffering
 
+## Ray on Clusters Gotchas
+
+- **Ray `/tmp` disk space**: Ray defaults to `/tmp/ray/` for session data, object spilling, and logs. On shared cluster nodes, `/tmp` fills up quickly for large jobs (e.g., 1000-environment parallel evals). Fix: `export RAY_TMPDIR=/path/to/shared/storage/tmp/ray` before launching. Symptom: `OSError: [Errno 28] No space left on device` partway through the job, no output saved.
+
+## uv + SLURM/Cluster Gotchas
+
+- **`UV_PYTHON_INSTALL_DIR` must point to shared storage on clusters**: By default uv installs Python to `~/.local/share/uv/python/`. If `$HOME` is local disk (not NFS), venv shebangs break on compute nodes with "bad interpreter: No such file or directory". Fix: set `UV_PYTHON_INSTALL_DIR` to a shared filesystem path before creating venvs.
+- **After changing `UV_PYTHON_INSTALL_DIR`**: Must run `uv python install <version>` to download Python to the new location, then recreate the venv (`uv venv --python <version> <path>`).
+- **Diagnosing "bad interpreter" in venvs**: Check the symlink chain: `ls -la <venv>/bin/python*` → follow to the real interpreter → verify it exists on the compute node. Also check `<venv>/pyvenv.cfg` for the `home =` path.
+
 ## Skills
 
 Reusable procedural workflows. Skills live in `~/.pi/agent/skills/<name>/SKILL.md`.
