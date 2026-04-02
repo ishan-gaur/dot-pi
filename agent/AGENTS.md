@@ -18,6 +18,7 @@
 ## Code Style
 
 - Be concise — avoid verbose docstrings that restate what the code already says. Keep comments to non-obvious "why" explanations.
+- **Tensor shape annotations on every intermediate variable** — annotate shape and semantics inline, e.g. `# h_V [B, L, H] - node features after encoding`. This makes complex tensor code self-documenting without needing to trace through function signatures. Define an index legend at the top of each class/module (e.g. `S: batch, P: position, T: token dim, D: embedding dim`) and use it consistently. Learned from Foundry's ProteinMPNN implementation where every single tensor line has a shape+meaning comment.
 - When redesigning: change the core abstraction only. Don't propagate to every consumer in the same pass — sketch consumer changes in comments or leave as TODOs for the user to adapt.
 - Preserve the user's existing comments, TODOs, and docstrings. Add new notes alongside them — don't replace or delete what the user wrote.
 - Don't add tiny wrapper methods (e.g. `tokenize()` that just calls `self.tokenizer(...)`) — let callers use the underlying API directly.
