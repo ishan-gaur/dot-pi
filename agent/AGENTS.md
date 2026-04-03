@@ -53,7 +53,8 @@
 - Skills — reusable procedural workflows and design preferences (see below)
 - [PyTorch Gotchas](gotchas/pytorch.md) — nn.Module MRO, LoRA, embedding traps
 - [Python ABC / Mixin Gotchas](gotchas/python-abc-mixin.md) — abstractmethod propagation, HF mixin pattern
-- [SLURM](gotchas/slurm.md) — cluster info, submit script, buffering
+- [SLURM](gotchas/slurm.md) — cluster info, submit script, buffering, uv on clusters
+- [Ray](gotchas/ray.md) — `/tmp` disk space on shared nodes
 
 ## Skills
 
