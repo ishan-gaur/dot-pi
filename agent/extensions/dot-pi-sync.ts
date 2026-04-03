@@ -54,18 +54,24 @@ export default function (pi: ExtensionAPI) {
 
 		if (behind === 0) return;
 
-		const ok = await ctx.ui.confirm(
-			"dot-pi updates",
-			`~/.pi is ${behind} commit${behind > 1 ? "s" : ""} behind origin/main. Pull?`,
-		);
+		// Defer the interactive confirm to the next tick. session_start fires
+		// during initExtensions(), which runs BEFORE ui.start(). If we await
+		// ctx.ui.confirm() here, the TUI selector is created but the terminal
+		// isn't processing input yet, causing a deadlock/hang.
+		setTimeout(async () => {
+			const ok = await ctx.ui.confirm(
+				"dot-pi updates",
+				`~/.pi is ${behind} commit${behind > 1 ? "s" : ""} behind origin/main. Pull?`,
+			);
 
-		if (ok) {
-			try {
-				sh("git pull --ff-only origin main");
-				ctx.ui.notify("~/.pi updated. Use /reload to pick up changes.", "success");
-			} catch (e: any) {
-				ctx.ui.notify(`Pull failed: ${e.message}`, "error");
+			if (ok) {
+				try {
+					sh("git pull --ff-only origin main");
+					ctx.ui.notify("~/.pi updated. Use /reload to pick up changes.", "success");
+				} catch (e: any) {
+					ctx.ui.notify(`Pull failed: ${e.message}`, "error");
+				}
 			}
-		}
+		}, 0);
 	});
 }
