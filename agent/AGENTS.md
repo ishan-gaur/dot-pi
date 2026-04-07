@@ -35,12 +35,25 @@
   - Install package in editable mode: `uv pip install -e .`
 - If `ruff` is not in `pyproject.toml`, add it: `uv add --dev ruff` (run from repo root).
 - Use `uv run ruff check` and `uv run ruff format` to lint and format.
+- `uv init` creates `.python-version` pinned to system default (may be 3.14) — run `uv python pin 3.12` before `uv sync` if project needs a specific version.
+- `uv init` also creates a `main.py` stub — delete it for library projects.
+
+## Refactoring
+
+- **Jedi for project-wide Python renames**: if `jedi` is installed, use `jedi.Script(path=..., project=jedi.Project('.')).rename(line, col, new_name=...).apply()` for symbol-aware renames across all files. Handles imports, type hints, inheritance, references — but NOT docstrings, comments, `__all__` string entries, or non-Python files. Follow up with sed for those. Always rename longer names first (e.g. `FooBar` before `Foo`) to avoid partial sed matches.
 
 ## Workflow
 
 - Always show the diff and ask for user review before pushing to remote. Don't push without approval.
 - **Before any merge/rebase** (from a worktree branch, or merging a worktree into main): check `git status` for uncommitted changes in the target repo. If there are any, ask the user whether to commit or stash them before proceeding — git will refuse the merge otherwise, and the error is confusing.
 - **Subagent usage**: use subagents to get a "user's" dissenting opinion on design choices (e.g. comparing format options). Don't farm out straightforward questions you can answer yourself — the user expects *you* to answer those.
+
+## GitHub CLI
+
+- `gh` installed at `~/bin/gh` (v2.89.0, user-level, no sudo)
+- Authenticated as `ishan-gaur` via device flow (`gh auth login --web`)
+- Useful for creating repos: `gh repo create ishan-gaur/<name> --public --source=. --push`
+- Visibility changes need: `gh repo edit <repo> --visibility public --accept-visibility-change-consequences`
 
 ## dot-pi Repo
 
