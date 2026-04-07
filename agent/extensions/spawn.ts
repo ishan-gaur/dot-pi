@@ -149,6 +149,58 @@ function shellQuote(s: string): string {
 	return "'" + s.replace(/'/g, "'\\''") + "'";
 }
 
+/**
+ * Scan a worktree for files that would be lost on removal.
+ * Returns three categories — all paths relative to worktree root:
+ *   - modified: tracked files with uncommitted changes (staged or unstaged)
+ *   - untracked: new files not in git and not gitignored
+ *   - gitignored: files ignored by .gitignore (silently destroyed by git worktree remove)
+ * Excludes .git/ and common reproducible dirs (.venv/, node_modules/, __pycache__/).
+ */
+function scanWorktreeFiles(worktreePath: string): {
+	modified: string[];
+	untracked: string[];
+	gitignored: string[];
+} {
+	const filterReproducible = (files: string[]) =>
+		files.filter(
+			(f) =>
+				!f.startsWith(".venv/") &&
+				!f.startsWith("node_modules/") &&
+				!f.includes("__pycache__/") &&
+				f !== ".venv" &&
+				f !== "node_modules",
+		);
+
+	const splitLines = (raw: string) => (raw ? raw.split("\n").filter(Boolean) : []);
+
+	// Uncommitted changes to tracked files (unstaged + staged)
+	const modifiedUnstaged = shSafe(`git diff --name-only`, worktreePath);
+	const modifiedStaged = shSafe(`git diff --cached --name-only`, worktreePath);
+	const modifiedSet = new Set([
+		...splitLines(modifiedUnstaged),
+		...splitLines(modifiedStaged),
+	]);
+
+	// Untracked files (not in git, not gitignored)
+	const untrackedRaw = shSafe(
+		`git ls-files --others --exclude-standard`,
+		worktreePath,
+	);
+
+	// Gitignored files (silently destroyed by git worktree remove)
+	const gitignoredRaw = shSafe(
+		`git ls-files --others --ignored --exclude-standard`,
+		worktreePath,
+	);
+
+	const modified = filterReproducible([...modifiedSet]);
+	const untracked = filterReproducible(splitLines(untrackedRaw));
+	const gitignored = filterReproducible(splitLines(gitignoredRaw));
+
+	return { modified, untracked, gitignored };
+}
+
 function findAgentsMd(repoRoot: string): string | null {
 	const candidates = [
 		join(repoRoot, "AGENTS.md"),
@@ -772,71 +824,129 @@ export default function (pi: ExtensionAPI) {
 
 			const shouldMerge = actionChoice.startsWith("Merge");
 
-			// --- Artifact audit via spawned session ---
-			const sessionDir = getSessionDirForCwd(wt.path);
-			let auditResult: string | null = null;
+			// --- Filesystem scan for uncommitted/untracked/gitignored files ---
+			const { modified, untracked, gitignored } = scanWorktreeFiles(wt.path);
+			const hasFiles =
+				modified.length > 0 || untracked.length > 0 || gitignored.length > 0;
 
-			if (existsSync(sessionDir)) {
-				const sessionFiles = readdirSync(sessionDir).filter((f) => f.endsWith(".jsonl"));
-				if (sessionFiles.length > 0) {
-					const runAudit = await ctx.ui.confirm(
-						"Run artifact audit?",
-						"Query the spawned session for gitignored files worth preserving " +
-						"(checkpoints, data, embeddings, etc.)",
-					);
+			if (hasFiles) {
+				const sections: string[] = [`## Files in worktree — ${selectedBranch}\n`];
 
-					if (runAudit) {
-						const sessionFile = join(sessionDir, sessionFiles[sessionFiles.length - 1]);
-						const auditPrompt = [
-							"I'm about to remove this worktree directory. Before I do, I need to know what files to preserve.",
-							"",
-							"Based on our conversation history, list every file that:",
-							"1. Was created, downloaded, trained, or generated during this session",
-							"2. Would be expensive or time-consuming to reproduce (training runs, large downloads, computed embeddings, etc.)",
-							"3. Might be too large to track in git",
-							"",
-							"For each file, include:",
-							"- Path (relative to the worktree root)",
-							"- What it is / how it was created",
-							"- Whether it should be copied to the main repo, or is safe to discard (reproducible quickly)",
-							"",
-							"Do NOT list files that are part of the git history (committed source code). Focus on gitignored artifacts, outputs, and data files.",
-							"If there are no such files, just say 'No artifacts to preserve.'",
-						].join("\n");
-
-						try {
-							const piOutput = execSync(
-								`pi -p --session ${shellQuote(sessionFile)} --no-tools --no-extensions --no-skills --no-prompt-templates ${shellQuote(auditPrompt)}`,
-								{ encoding: "utf-8", timeout: 120_000, stdio: ["pipe", "pipe", "pipe"] },
-							).trim();
-
-							if (piOutput && !piOutput.toLowerCase().includes("no artifacts to preserve")) {
-								auditResult = piOutput;
-							}
-						} catch (e: any) {
-							ctx.ui.notify(
-								`Artifact audit failed: ${e.message?.slice(0, 100)}. Continuing without audit.`,
-								"warning",
-							);
-						}
+				const addSection = (
+					title: string,
+					files: string[],
+					note?: string,
+				) => {
+					sections.push(`### ${title} (${files.length})\n`);
+					if (note) sections.push(note + "\n");
+					const shown = files.slice(0, 50);
+					sections.push(shown.map((f) => `- \`${f}\``).join("\n"));
+					if (files.length > 50) {
+						sections.push(`\n...and ${files.length - 50} more`);
 					}
-				}
-			}
+				};
 
-			if (auditResult) {
-				// Show the audit result in the conversation so the user can review it
+				if (modified.length > 0) {
+					addSection(
+						"Uncommitted changes",
+						modified,
+						"⚠️ These tracked files have **unsaved changes** that were never committed. They will be lost.",
+					);
+				}
+
+				if (untracked.length > 0) {
+					addSection("Untracked", untracked);
+				}
+
+				if (gitignored.length > 0) {
+					addSection(
+						"Gitignored",
+						gitignored,
+						"These will be **silently destroyed** by worktree removal.",
+					);
+				}
+
 				pi.sendMessage({
-					customType: "spawn-audit",
-					content: `## Artifact Audit — ${selectedBranch}\n\n${auditResult}`,
+					customType: "spawn-files",
+					content: sections.join("\n"),
 					display: true,
 				});
 
+				// Optionally query the spawned session for context on what the files are
+				const sessionDir = getSessionDirForCwd(wt.path);
+				if (existsSync(sessionDir)) {
+					const sessionFiles = readdirSync(sessionDir).filter((f) =>
+						f.endsWith(".jsonl"),
+					);
+					if (sessionFiles.length > 0) {
+						const runAudit = await ctx.ui.confirm(
+							"Run LLM audit?",
+							"Query the spawned session for context on which files are worth preserving",
+						);
+
+						if (runAudit) {
+							const sessionFile = join(
+								sessionDir,
+								sessionFiles[sessionFiles.length - 1],
+							);
+							const fileList = [...modified, ...untracked, ...gitignored]
+								.slice(0, 100)
+								.map((f) => `  ${f}`)
+								.join("\n");
+							const auditPrompt = [
+								"I'm about to remove this worktree. These non-git files were found:",
+								"",
+								fileList,
+								"",
+								"Based on our conversation, which of these files:",
+								"1. Would be expensive to reproduce (training runs, large downloads, computed embeddings)?",
+								"2. Should be copied to the main repo before removal?",
+								"3. Are safe to discard (quickly reproducible)?",
+								"",
+								"Be concise. If none are worth preserving, say 'No artifacts to preserve.'",
+							].join("\n");
+
+							try {
+								const piOutput = execSync(
+									`pi -p --session ${shellQuote(sessionFile)} --no-tools --no-extensions --no-skills --no-prompt-templates ${shellQuote(auditPrompt)}`,
+									{
+										encoding: "utf-8",
+										timeout: 120_000,
+										stdio: ["pipe", "pipe", "pipe"],
+									},
+								).trim();
+
+								if (
+									piOutput &&
+									!piOutput
+										.toLowerCase()
+										.includes("no artifacts to preserve")
+								) {
+									pi.sendMessage({
+										customType: "spawn-audit",
+										content: `## LLM Audit — ${selectedBranch}\n\n${piOutput}`,
+										display: true,
+									});
+								}
+							} catch (e: any) {
+								ctx.ui.notify(
+									`LLM audit failed: ${e.message?.slice(0, 100)}`,
+									"warning",
+								);
+							}
+						}
+					}
+				}
+
 				const proceed = await ctx.ui.confirm(
 					"Proceed with cleanup?",
-					"Review the artifact audit above. Cancel to handle artifacts before cleanup.",
+					"Review the files above. Cancel to handle them before cleanup.",
 				);
 				if (!proceed) {
-					ctx.ui.notify("Cleanup paused — handle artifacts, then run /spawn-list again.", "info");
+					ctx.ui.notify(
+						"Cleanup paused — handle files, then run /spawn-list again.",
+						"info",
+					);
 					return;
 				}
 			}
@@ -847,8 +957,17 @@ export default function (pi: ExtensionAPI) {
 					sh(`git merge ${selectedBranch} --no-edit`, cwd);
 					ctx.ui.notify(`Merged ${selectedBranch} into ${currentBranch}`, "success");
 				} catch (e: any) {
+					const stderr = (e.message || "").toLowerCase();
+					let hint: string;
+					if (stderr.includes("local changes") || stderr.includes("would be overwritten")) {
+						hint = "Commit or stash your local changes first, then run /spawn-list again.";
+					} else if (stderr.includes("conflict") || stderr.includes("merge_head")) {
+						hint = "Resolve conflicts manually, then run /spawn-list again to clean up.";
+					} else {
+						hint = "Fix the issue above, then run /spawn-list again.";
+					}
 					ctx.ui.notify(
-						`Merge failed: ${e.message}\n\nResolve conflicts manually, then run /spawn-list again to clean up.`,
+						`Merge failed:\n\n${e.message}\n\n${hint}`,
 						"error",
 					);
 					return;
@@ -871,13 +990,14 @@ export default function (pi: ExtensionAPI) {
 				actions.push(`migrated ${migrated} session${migrated > 1 ? "s" : ""}`);
 			}
 
-			// Remove worktree (no --force: should be clean after merge/audit)
-			const removeResult = shSafe(`git worktree remove "${wt.path}"`, cwd);
-			if (removeResult === "" && existsSync(wt.path)) {
-				// Remove failed silently (dirty worktree) — ask before forcing
+			// Remove worktree — use --force if we already showed files and user confirmed
+			const forceFlag = hasFiles ? " --force" : "";
+			shSafe(`git worktree remove${forceFlag} "${wt.path}"`, cwd);
+			if (existsSync(wt.path)) {
+				// Removal still failed (e.g. open file handles) — force as last resort
 				const forceRemove = await ctx.ui.confirm(
-					"Worktree has uncommitted or untracked files",
-					`Force remove ${wt.path}? Untracked files will be lost.`,
+					"Worktree removal failed",
+					`Force remove ${wt.path}?`,
 				);
 				if (!forceRemove) {
 					ctx.ui.notify(

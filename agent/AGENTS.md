@@ -39,6 +39,8 @@
 ## Workflow
 
 - Always show the diff and ask for user review before pushing to remote. Don't push without approval.
+- **Before any merge/rebase** (from a worktree branch, or merging a worktree into main): check `git status` for uncommitted changes in the target repo. If there are any, ask the user whether to commit or stash them before proceeding — git will refuse the merge otherwise, and the error is confusing.
+- **Subagent usage**: use subagents to get a "user's" dissenting opinion on design choices (e.g. comparing format options). Don't farm out straightforward questions you can answer yourself — the user expects *you* to answer those.
 
 ## dot-pi Repo
 
@@ -71,3 +73,4 @@ Reusable procedural workflows. Skills live in `~/.pi/agent/skills/<name>/SKILL.m
 - **[modularize-agents-md](skills/modularize-agents-md/SKILL.md)** — Break down a monolithic AGENTS.md into co-located design doc files. 4 phases: Audit → Root & Hubs → Per-Component Docs → Skills & Cleanup. Key principle: rich leaves (per-component .md with Dependencies/Used By/Design/Gotchas), lean parents (hub files with links). Co-locate design docs next to source files. Models each get their own subdirectory. Skills go in `.agents/skills/` for agent-harness-agnostic discovery (not `.pi/skills/`).
 - **[redesign](skills/redesign/SKILL.md)** — Interactive workflow for redesigning library code. Research existing patterns, brainstorm approaches, sketch rewrites, create branches for each option, compare changes, merge the winner. Paired with the [redesign extension](extensions/AGENTS.md#redesign-extension--future-plans).
 - **[worktree-merge](skills/worktree-merge/SKILL.md)** — Safely merge worktree branches and clean up. Key gotcha: `git status` hides gitignored artifacts (checkpoints, data files, wandb logs) that get destroyed on `git worktree remove`. Scans for artifacts before removal.
+- **[add-provider](skills/add-provider/SKILL.md)** — Add a new AI model provider to pi. Research API compatibility, add models.json config (if not built-in), create auth.json placeholder, instruct user to fill in key.
