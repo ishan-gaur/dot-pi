@@ -9,7 +9,10 @@
  * node_modules, data files, build artifacts, etc. are automatically excluded.
  * Falls back to grep if rg is not available.
  *
- * Usage: /message-in-a-bottle
+ * Usage: /message-in-a-bottle [path]
+ *
+ * If path is given (file or folder), only that target is searched.
+ * Otherwise the entire project (ctx.cwd) is searched.
  *
  * Controls:
  *   ↑/↓     navigate
@@ -41,19 +44,23 @@ interface Selection {
 
 export default function (pi: ExtensionAPI) {
 	pi.registerCommand("message-in-a-bottle", {
-		description: "Find TODO[pi] items and select which ones to work on or remove",
-		handler: async (_args, ctx) => {
+		description: "Find TODO[pi] items and select which ones to work on or remove. Optional: path to search.",
+		handler: async (args, ctx) => {
+			const searchPath = args.trim() || "";
+			const pathSuffix = searchPath ? ` ${searchPath}` : "";
+
 			// Search using grep (rg preferred but grep as fallback)
 			let stdout: string;
 			try {
 				stdout = execSync(
-					'rg --no-heading --line-number --column --color=never --max-columns=500 --fixed-strings "TODO[pi]"',
+					`rg --with-filename --no-heading --line-number --column --color=never --max-columns=500 --fixed-strings "TODO[pi]"${pathSuffix}`,
 					{ cwd: ctx.cwd, encoding: "utf-8", timeout: 10000 },
 				);
 			} catch {
 				try {
+					const grepTarget = searchPath || ".";
 					stdout = execSync(
-						'grep -rn --include="*.py" --include="*.ts" --include="*.js" --include="*.tsx" --include="*.jsx" --include="*.rs" --include="*.go" --include="*.java" --include="*.c" --include="*.cpp" --include="*.h" --include="*.md" --include="*.toml" --include="*.yaml" --include="*.yml" --include="*.json" --include="*.sh" --include="*.rb" --include="*.ex" --include="*.exs" --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=__pycache__ --exclude-dir=.venv --exclude-dir=venv --exclude-dir=dist --exclude-dir=build --exclude-dir=target "TODO\\[pi\\]" .',
+						`grep -rHn --include="*.py" --include="*.ts" --include="*.js" --include="*.tsx" --include="*.jsx" --include="*.rs" --include="*.go" --include="*.java" --include="*.c" --include="*.cpp" --include="*.h" --include="*.md" --include="*.toml" --include="*.yaml" --include="*.yml" --include="*.json" --include="*.sh" --include="*.rb" --include="*.ex" --include="*.exs" --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=__pycache__ --exclude-dir=.venv --exclude-dir=venv --exclude-dir=dist --exclude-dir=build --exclude-dir=target "TODO\\[pi\\]" ${grepTarget}`,
 						{ cwd: ctx.cwd, encoding: "utf-8", timeout: 10000 },
 					);
 				} catch {

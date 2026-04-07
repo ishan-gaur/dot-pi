@@ -15,6 +15,8 @@ Global pi extensions live in `~/.pi/agent/extensions/*.ts` (auto-discovered). Us
 
 - **`pi.exec()` is unreliable for shell commands** — args may be escaped/interpreted differently than expected. Use `execSync` from `node:child_process` with `{ cwd: ctx.cwd, encoding: "utf-8" }` instead.
 - **`rg` may not be on the user's PATH** even if pi bundles it at `~/.pi/agent/bin/rg`. Always provide a `grep` fallback.
+- **`execSync` uses `/bin/sh`** — tools like `rg` that are on the user's bash/zsh PATH (e.g. via `.bashrc`, nvm, cargo) may not be available under bare `/bin/sh`. The `grep` fallback isn't just for "rg not installed" — it's the primary path on many setups.
+- **Single-file search omits filenames** — both `rg` and `grep` omit the filename prefix when searching a single file (not a directory). Use `rg --with-filename` and `grep -H` to force it, otherwise line-parsing regexes that expect `file:line:content` will break.
 - **Unused imports in extensions** don't cause load failures but are noisy — keep imports clean.
 
 ## Redesign Extension — Future Plans
