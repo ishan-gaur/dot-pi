@@ -2,13 +2,13 @@
 
 ## Session Hygiene
 
-- When you learn something non-obvious about the project (data quirks, file locations, normalization logic, gotchas, key design decisions), update the project's AGENTS.md immediately — don't wait until session end.
+- When you learn something non-obvious about the project (data quirks, file locations, normalization logic, gotchas, key design decisions), update the project's AGENTS.md immediately — don't wait until session end. [×2]
 - Keep AGENTS.md notes factual and concise: what a future session needs to hit the ground running.
 - Don't duplicate what's already in the README; AGENTS.md is for working knowledge (how things actually connect), README is for users.
 
 ## AGENTS.md Usage Tracking
 
-- Whenever you consult an AGENTS.md file (global or project-level) and use a specific piece of information to inform your work, increment a usage counter on that line.
+- Whenever you consult an AGENTS.md file (global or project-level) and use a specific piece of information to inform your work, increment a usage counter on that line. [×2]
 - Format: append `[×N]` at the end of the line (or bullet point), where N is the cumulative count. First use: `[×1]`. On subsequent uses, increment: `[×2]`, `[×3]`, etc.
 - "Use" means the information actually influenced a decision, avoided a mistake, or saved you from re-discovering something — not just reading the file.
 - If a line has no counter, it has never been used yet. This is fine — not every note will be useful.
@@ -44,23 +44,24 @@
 
 ## Workflow
 
-- Always show the diff and ask for user review before pushing to remote. Don't push without approval.
+- Always show the diff and ask for user review before pushing to remote. Don't push without approval. [×2]
 - **Before any merge/rebase** (from a worktree branch, or merging a worktree into main): check `git status` for uncommitted changes in the target repo. If there are any, ask the user whether to commit or stash them before proceeding — git will refuse the merge otherwise, and the error is confusing.
 - **Subagent usage**: use subagents to get a "user's" dissenting opinion on design choices (e.g. comparing format options). Don't farm out straightforward questions you can answer yourself — the user expects *you* to answer those.
 
 ## GitHub CLI
 
-- `gh` installed at `~/bin/gh` (v2.89.0, user-level, no sudo)
-- Authenticated as `ishan-gaur` via device flow (`gh auth login --web`)
+- `gh` installed at `~/bin/gh` (v2.89.0, user-level, no sudo) [×1]
+- Authenticated as `ishan-gaur` via device flow (`gh auth login --web`) [×1]
 - Useful for creating repos: `gh repo create ishan-gaur/<name> --public --source=. --push`
 - Visibility changes need: `gh repo edit <repo> --visibility public --accept-visibility-change-consequences`
 
 ## dot-pi Repo
 
-- The git repo root is `~/.pi`, but most config lives under `agent/`. Use `agent/` prefix in git commands (e.g. `git add agent/extensions/foo.ts`, not `git add extensions/foo.ts`).
-- `setup.sh` at repo root bootstraps new machines: installs nvm + Node + pi, then clones/merges config.
+- The git repo root is `~/.pi`, but most config lives under `agent/`. Use `agent/` prefix in git commands (e.g. `git add agent/extensions/foo.ts`, not `git add extensions/foo.ts`). [×2]
+- `setup.sh` at repo root bootstraps new machines: installs tmux, nvm + Node, gh, pi, Gemini CLI, then clones/merges config. [×2]
 - **Tracked**: extensions, skills, gotchas, AGENTS.md files, `agent/settings.json` (user preferences: default model, packages)
-- **Gitignored**: `agent/auth.json` (API keys), `agent/models.json` (local model servers), `agent/sessions/`, `agent/bin/`
+- **Gitignored**: `agent/auth.json` (API keys), `agent/models.json` (local model servers), `agent/sessions/`, `agent/bin/` [×1]
+- ZAI is a built-in API-key provider in current pi (`docs/providers.md`); configure `agent/auth.json` key `"zai"` and do **not** add `agent/models.json` entries unless overriding defaults.
 
 ## Sub-docs
 

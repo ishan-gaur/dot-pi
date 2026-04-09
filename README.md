@@ -10,7 +10,10 @@ On a new machine:
 curl -sL https://raw.githubusercontent.com/ishan-gaur/dot-pi/main/setup.sh | bash
 ```
 
-This installs Node (via nvm), pi, and clones this config into `~/.pi`. Safe to re-run — it pulls latest if already set up.
+This installs tmux, Node (via nvm), GitHub CLI, pi, Gemini CLI, and clones this config into `~/.pi`. Safe to re-run — it pulls latest if already set up.
+
+If you're on a new machine, you probably also want to install helix, uv, Github CLI, and add the $TERMINFO for Ghostty to work properly.
+TODO[pi] add instructions for these four steps here.
 
 ## What's included
 

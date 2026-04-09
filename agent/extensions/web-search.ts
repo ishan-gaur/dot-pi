@@ -1,8 +1,7 @@
 /**
- * Web search via Claude CLI's built-in WebSearch tool.
+ * Web search via Gemini CLI's built-in web tools.
  *
- * Uses your existing Claude subscription (Pro/Max/Teams/Enterprise) —
- * no separate API key needed. Shells out to `claude -p --allowedTools WebSearch`.
+ * Shells out to `gemini -p "..."`.
  *
  * Provides:
  *   - `web_search` tool (agent-callable)
@@ -14,12 +13,19 @@ import { Type } from "@sinclair/typebox";
 import { execSync, spawn } from "node:child_process";
 
 const TIMEOUT_MS = 120_000; // 2 minutes max per search
-const MODEL = "sonnet"; // fast + cheap for search
 
-function claudeSearch(query: string, signal?: AbortSignal): Promise<string> {
+function geminiSearch(query: string, signal?: AbortSignal): Promise<string> {
+	const prompt = [
+		`Search the web for: ${query}`,
+		"",
+		"Use web search/fetch tools to ground your answer in current sources.",
+		"Return results with titles, URLs, and brief descriptions.",
+		"Include source citations.",
+	].join("\n");
+
 	return new Promise((resolve, reject) => {
-		const proc = spawn("claude", ["-p", "--allowedTools", "WebSearch", "--model", MODEL], {
-			stdio: ["pipe", "pipe", "pipe"],
+		const proc = spawn("gemini", ["-p", prompt], {
+			stdio: ["ignore", "pipe", "pipe"],
 		});
 
 		let stdout = "";
@@ -60,7 +66,7 @@ function claudeSearch(query: string, signal?: AbortSignal): Promise<string> {
 			done = true;
 			clearTimeout(timer);
 			if (code !== 0) {
-				reject(new Error(`claude CLI exited with code ${code}: ${stderr}`));
+				reject(new Error(`gemini CLI exited with code ${code}: ${stderr || stdout}`));
 			} else {
 				resolve(stdout.trim());
 			}
@@ -69,32 +75,33 @@ function claudeSearch(query: string, signal?: AbortSignal): Promise<string> {
 		proc.on("error", (err) => {
 			done = true;
 			clearTimeout(timer);
-			reject(new Error(`Failed to spawn claude CLI: ${err.message}`));
+			reject(new Error(`Failed to spawn gemini CLI: ${err.message}`));
 		});
-
-		// Send query via stdin
-		proc.stdin.write(
-			`Search the web for: ${query}\n\nReturn results with titles, URLs, and brief descriptions. Include source citations.`,
-		);
-		proc.stdin.end();
 	});
 }
 
-function hasClaude(): boolean {
+function hasGemini(): boolean {
 	try {
-		execSync("which claude", { stdio: ["pipe", "pipe", "pipe"] });
+		execSync("which gemini", { stdio: ["pipe", "pipe", "pipe"] });
 		return true;
 	} catch {
 		return false;
 	}
 }
 
+const INSTALL_HELP = [
+	"gemini CLI not found.",
+	"Install it: npm install -g @google/gemini-cli",
+	"Then run `gemini` once to authenticate.",
+	"Web tools docs: https://geminicli.com/docs/cli/tutorials/web-tools/",
+].join("\n");
+
 export default function (pi: ExtensionAPI) {
 	pi.registerTool({
 		name: "web_search",
 		label: "Web Search",
 		description:
-			"Search the web using Claude's built-in WebSearch. Returns results with titles, URLs, and descriptions. Use for finding documentation, recent information, facts, or any web content.",
+			"Search the web using Gemini CLI's built-in web tools. Returns results with titles, URLs, and descriptions. Use for finding documentation, recent information, facts, or any web content.",
 		promptGuidelines: [
 			"Use web_search when you need current information, documentation, or facts not in your training data.",
 			"Web search takes 15-60 seconds — tell the user you're searching before calling it.",
@@ -104,17 +111,15 @@ export default function (pi: ExtensionAPI) {
 		}),
 
 		async execute(_toolCallId, params, signal, onUpdate, _ctx) {
-			if (!hasClaude()) {
-				throw new Error(
-					"claude CLI not found. Install it: npm install -g @anthropic-ai/claude-code\nRequires a paid Claude plan (Pro/Max/Teams/Enterprise).",
-				);
+			if (!hasGemini()) {
+				throw new Error(INSTALL_HELP);
 			}
 
 			onUpdate?.({
 				content: [{ type: "text", text: `Searching: ${params.query}...` }],
 			});
 
-			const result = await claudeSearch(params.query, signal);
+			const result = await geminiSearch(params.query, signal);
 
 			return {
 				content: [{ type: "text", text: result }],
@@ -132,18 +137,15 @@ export default function (pi: ExtensionAPI) {
 				return;
 			}
 
-			if (!hasClaude()) {
-				ctx.ui.notify(
-					"claude CLI not found. Install: npm install -g @anthropic-ai/claude-code",
-					"error",
-				);
+			if (!hasGemini()) {
+				ctx.ui.notify("gemini CLI not found. Install: npm install -g @google/gemini-cli", "error");
 				return;
 			}
 
 			ctx.ui.notify(`Searching: ${query}...`, "info");
 
 			try {
-				const result = await claudeSearch(query);
+				const result = await geminiSearch(query);
 				pi.sendMessage({
 					customType: "web-search",
 					content: `## Web Search: ${query}\n\n${result}`,
