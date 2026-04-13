@@ -22,7 +22,7 @@
 - When redesigning: change the core abstraction only. Don't propagate to every consumer in the same pass — sketch consumer changes in comments or leave as TODOs for the user to adapt.
 - Preserve the user's existing comments, TODOs, and docstrings. Add new notes alongside them — don't replace or delete what the user wrote.
 - Don't add tiny wrapper methods (e.g. `tokenize()` that just calls `self.tokenizer(...)`) — let callers use the underlying API directly.
-- Prefer composition over multiple inheritance when both parents have `__init__` — double `nn.Module.__init__` resets internal state. Use "has-a" (e.g. `self.probe = LinearProbe(...)`) not "is-a" for combining template nn.Modules with PredictiveModel.
+- Prefer composition over multiple inheritance when both parents have `__init__` — double `nn.Module.__init__` resets internal state. Use "has-a" (e.g. `self.probe = LinearProbe(...)`) not "is-a" for combining template nn.Modules with PredictiveModel. [×4]
 
 ## Python Projects
 
@@ -45,7 +45,7 @@
 ## Workflow
 
 - Always show the diff and ask for user review before pushing to remote. Don't push without approval. [×2]
-- **Before any merge/rebase** (from a worktree branch, or merging a worktree into main): check `git status` for uncommitted changes in the target repo. If there are any, ask the user whether to commit or stash them before proceeding — git will refuse the merge otherwise, and the error is confusing.
+- **Before any merge/rebase** (from a worktree branch, or merging a worktree into main): check `git status` for uncommitted changes in the target repo. If there are any, ask the user whether to commit or stash them before proceeding — git will refuse the merge otherwise, and the error is confusing. [×2]
 - **Subagent usage**: use subagents to get a "user's" dissenting opinion on design choices (e.g. comparing format options). Don't farm out straightforward questions you can answer yourself — the user expects *you* to answer those.
 
 ## GitHub CLI
@@ -60,8 +60,8 @@
 - The git repo root is `~/.pi`, but most config lives under `agent/`. Use `agent/` prefix in git commands (e.g. `git add agent/extensions/foo.ts`, not `git add extensions/foo.ts`). [×2]
 - `setup.sh` at repo root bootstraps new machines: installs tmux, nvm + Node, gh, pi, Gemini CLI, helix, uv, Ghostty terminfo, then clones/merges config. [×3]
 - **Tracked**: extensions, skills, gotchas, AGENTS.md files, `agent/settings.json` (user preferences: default model, packages)
-- **Gitignored**: `agent/auth.json` (API keys), `agent/models.json` (local model servers), `agent/sessions/`, `agent/bin/` [×1]
-- ZAI is a built-in API-key provider in current pi (`docs/providers.md`); configure `agent/auth.json` key `"zai"` and do **not** add `agent/models.json` entries unless overriding defaults.
+- **Gitignored**: `agent/auth.json` (API keys), `agent/models.json` (local model servers), `agent/sessions/`, `agent/bin/` [×2]
+- Built-in pi providers (from `docs/providers.md`, e.g. `anthropic`) should be configured in `agent/auth.json` only; adding them to `agent/models.json` can duplicate/override defaults.
 
 ## Sub-docs
 
@@ -87,4 +87,4 @@ Reusable procedural workflows. Skills live in `~/.pi/agent/skills/<name>/SKILL.m
 - **[modularize-agents-md](skills/modularize-agents-md/SKILL.md)** — Break down a monolithic AGENTS.md into co-located design doc files. 4 phases: Audit → Root & Hubs → Per-Component Docs → Skills & Cleanup. Key principle: rich leaves (per-component .md with Dependencies/Used By/Design/Gotchas), lean parents (hub files with links). Co-locate design docs next to source files. Models each get their own subdirectory. Skills go in `.agents/skills/` for agent-harness-agnostic discovery (not `.pi/skills/`).
 - **[redesign](skills/redesign/SKILL.md)** — Interactive workflow for redesigning library code. Research existing patterns, brainstorm approaches, sketch rewrites, create branches for each option, compare changes, merge the winner. Paired with the [redesign extension](extensions/AGENTS.md#redesign-extension--future-plans).
 - **[worktree-merge](skills/worktree-merge/SKILL.md)** — Safely merge worktree branches and clean up. Key gotcha: `git status` hides gitignored artifacts (checkpoints, data files, wandb logs) that get destroyed on `git worktree remove`. Scans for artifacts before removal.
-- **[add-provider](skills/add-provider/SKILL.md)** — Add a new AI model provider to pi. Research API compatibility, add models.json config (if not built-in), create auth.json placeholder, instruct user to fill in key.
+- **[add-provider](skills/add-provider/SKILL.md)** — Add a new AI model provider to pi. Research API compatibility, add models.json config (if not built-in), create auth.json placeholder, instruct user to fill in key. [×1]
