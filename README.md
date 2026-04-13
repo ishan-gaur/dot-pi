@@ -10,7 +10,20 @@ On a new machine:
 curl -sL https://raw.githubusercontent.com/ishan-gaur/dot-pi/main/setup.sh | bash
 ```
 
-This installs Node (via nvm), pi, and clones this config into `~/.pi`. Safe to re-run — it pulls latest if already set up.
+This installs tmux, Node (via nvm), GitHub CLI, pi, Gemini CLI, and clones this config into `~/.pi`. Safe to re-run — it pulls latest if already set up.
+
+The script also installs:
+- **[Helix](https://helix-editor.com/)** editor (via package manager)
+- **[uv](https://docs.astral.sh/uv/)** Python package manager (via official installer to `~/.local/bin`)
+- **Ghostty terminfo** (`xterm-ghostty`) for proper terminal support when SSH-ing to remote machines
+
+If Ghostty v1.2.0+ is your local terminal, you can instead enable automatic terminfo propagation in your Ghostty config:
+
+```
+shell-integration-features = ssh-terminfo
+```
+
+See [Ghostty terminfo docs](https://ghostty.org/docs/help/terminfo) for details.
 
 ## What's included
 
