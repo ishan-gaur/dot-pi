@@ -58,7 +58,7 @@
 ## dot-pi Repo
 
 - The git repo root is `~/.pi`, but most config lives under `agent/`. Use `agent/` prefix in git commands (e.g. `git add agent/extensions/foo.ts`, not `git add extensions/foo.ts`). [×2]
-- `setup.sh` at repo root bootstraps new machines: installs tmux, nvm + Node, gh, pi, Gemini CLI, then clones/merges config. [×2]
+- `setup.sh` at repo root bootstraps new machines: installs tmux, nvm + Node, gh, pi, Gemini CLI, helix, uv, Ghostty terminfo, then clones/merges config. [×3]
 - **Tracked**: extensions, skills, gotchas, AGENTS.md files, `agent/settings.json` (user preferences: default model, packages)
 - **Gitignored**: `agent/auth.json` (API keys), `agent/models.json` (local model servers), `agent/sessions/`, `agent/bin/` [×1]
 - ZAI is a built-in API-key provider in current pi (`docs/providers.md`); configure `agent/auth.json` key `"zai"` and do **not** add `agent/models.json` entries unless overriding defaults.

@@ -149,7 +149,66 @@ echo "Gemini web-search quick use:"
 echo "  gemini -p \"Search the web for: <query>\""
 echo "  Docs: https://geminicli.com/docs/cli/tutorials/web-tools/"
 
-# --- 6. Clone/sync ~/.pi config ---
+# --- 6. Install helix if needed ---
+if ! command -v hx &>/dev/null; then
+    echo "Helix editor not found — installing..."
+    if [[ "$(uname)" == "Darwin" ]]; then
+        if command -v brew &>/dev/null; then
+            brew install helix
+        else
+            echo "ERROR: Homebrew not found. Install it first: https://brew.sh"
+            exit 1
+        fi
+    elif command -v apt-get &>/dev/null; then
+        sudo apt-get update && sudo apt-get install -y helix
+    elif command -v dnf &>/dev/null; then
+        sudo dnf install -y helix
+    elif command -v pacman &>/dev/null; then
+        sudo pacman -S --noconfirm helix
+    else
+        echo "WARNING: Could not detect package manager. Install helix manually: https://docs.helix-editor.com/install.html"
+    fi
+    echo "helix installed: $(hx --version 2>/dev/null || echo 'done')"
+else
+    echo "helix found: $(hx --version 2>/dev/null || echo 'found')"
+fi
+
+# --- 7. Install uv if needed ---
+if ! command -v uv &>/dev/null; then
+    echo "uv not found — installing..."
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    # uv installs to ~/.local/bin — add to PATH for this session
+    export PATH="$HOME/.local/bin:$PATH"
+    echo "uv installed: $(uv --version 2>/dev/null || echo 'done')"
+else
+    echo "uv found: $(uv --version 2>/dev/null || echo 'found')"
+fi
+
+# --- 8. Ghostty terminfo (for SSH to remote machines) ---
+if ! infocmp -x xterm-ghostty &>/dev/null; then
+    echo "xterm-ghostty terminfo not found — installing..."
+    # Ghostty bundles its terminfo; download and compile it
+    tmpdir=$(mktemp -d)
+    curl -fsSL https://ghostty.org/docs/terminfo -o "$tmpdir/ghostty.terminfo" 2>/dev/null || true
+    if [ -f "$tmpdir/ghostty.terminfo" ] && [ -s "$tmpdir/ghostty.terminfo" ]; then
+        tic -x "$tmpdir/ghostty.terminfo"
+        echo "xterm-ghostty terminfo installed."
+    else
+        # Fallback: generate from current Ghostty installation if available
+        if command -v ghostty &>/dev/null; then
+            ghostty +show-terminfo | tic -x -
+            echo "xterm-ghostty terminfo installed (from local Ghostty)."
+        else
+            echo "WARNING: Could not install xterm-ghostty terminfo."
+            echo "  If you use Ghostty, see: https://ghostty.org/docs/help/terminfo"
+        fi
+    fi
+    rm -rf "$tmpdir"
+else
+    echo "xterm-ghostty terminfo found."
+fi
+
+# --- 9. Clone/sync ~/.pi config ---
 if [ -d "$TARGET/.git" ]; then
     echo "~/.pi is already a git repo — pulling latest..."
     git -C "$TARGET" pull --ff-only
